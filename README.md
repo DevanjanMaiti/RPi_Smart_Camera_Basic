@@ -1,3 +1,11 @@
+This project uses a cheap RPi3 and Pi Camera v1 to create a low-cost replacement for commercially available cameras that offer only motion detection (faulty!) and expensive cloud storage for months of recording.
+
+Instead, this project uses a light-weight TFLite object recognition model that detects multiple objects such as persons or cars and triggers recording of images or videos only when objects of interest are detected. These images/videos are then uploaded to a connected Google Drive account from where user can monitor relevant activities.
+
+This project was created since commercially available cameras today don't have this basic brain and keep sending notifications for any random movement in its field of view. This creates unnecessary triggers to the user and makes finding real incidents a nightmare.
+
+Please follow the steps below to set up your own simple Rpi Smart Camera:
+
 1. Follow the steps in Raspberry_Pi_Guide.md from Step 1a till Step 1c.
 2. Run Step 1d using Option 1; model .zip can be downloaded directly from this repo in case you face any challenges with Google storage API.
 3. Replace the "TFLite_detection_webcam.py" file in "tflite1" directory with the version available in this repository.
