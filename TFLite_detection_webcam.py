@@ -28,6 +28,9 @@ import importlib.util
 ##from time import sleep
 import subprocess
 import shutil
+
+from PIL import Image
+import imagehash
 ##import wiringpi
 ##import requests
 ##import picamera
@@ -191,12 +194,15 @@ while True:
     os.mkdir('/home/pi/proj/cam_vids/')
     
     time.sleep(1)
+ #   hash_prev = imagehash.average_hash(Image.open('/home/pi/tflite1/test1.jpg'))
+    hash_prev = 0
+    cutoff = 5
     
     while gdrive_clr_loop_cnt < 10000: ## total images = 10000 * 5
         
         print("camera running, looking around!!")
         media_upld_loop_cnt = 0
-        
+
         while media_upld_loop_cnt < 5:
         
             # Start timer (for calculating frame rate)
@@ -210,6 +216,7 @@ while True:
             # Acquire frame and resize to expected shape [1xHxWx3]
             frame = frame1.copy()
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
             frame_resized = cv2.resize(frame_rgb, (width, height))
             input_data = np.expand_dims(frame_resized, axis=0)
 
@@ -257,14 +264,26 @@ while True:
                         time_local = time.localtime()
                         time_str = time.asctime(time_local)
                         img_fpath = '/home/pi/proj/cam_vids/%s.jpg' % time_str
-                        cv2.imwrite(img_fpath, frame_rgb)
-    ##                    camera.capture(img_fpath)
+                        cv2.imwrite(img_fpath, frame)
+
+                        hash_new = imagehash.average_hash(Image.open(img_fpath))
+                        hash_new_int = hash_new.__hash__()
+
+                        hash_diff = abs(hash_prev - hash_new_int)
+                        if hash_diff < cutoff:
+                            print("similar images, event ignored ....")
+                            os.remove(img_fpath)
+                        hash_prev = hash_new_int
+
+
+
                     
     ##                    subprocess.run(['MP4Box', '-add', '/home/pi/proj/cam_vids/temp.h264', '/home/pi/proj/cam_vids/temp.mp4'])
     ##                    os.rename(src_fname, dst_fname)
 ##                        os.remove(img_fpath)
     ##                    subprocess.run(['rclone', 'copy', dst_fname, 'Cam_Drive:Cam_Drive'])
                         media_upld_loop_cnt = media_upld_loop_cnt + 1
+                        print("CNT=", media_upld_loop_cnt)
                         
                         break
 
