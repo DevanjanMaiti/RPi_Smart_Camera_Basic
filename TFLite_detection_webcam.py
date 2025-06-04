@@ -196,8 +196,9 @@ while True:
     time.sleep(1)
  #   hash_prev = imagehash.average_hash(Image.open('/home/pi/tflite1/test1.jpg'))
     hash_prev = 0
-    cutoff = 5
-    
+    img_hash_cutoff = 5
+    light_threshold = 50
+
     while gdrive_clr_loop_cnt < 10000: ## total images = 10000 * 5
         
         print("camera running, looking around!!")
@@ -216,6 +217,13 @@ while True:
             # Acquire frame and resize to expected shape [1xHxWx3]
             frame = frame1.copy()
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            # Darkness Detection
+            frame_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+            avg_brightness = np.mean(frame_gray)
+            if avg_brightness < light_threshold:
+                print("too dark to process, camera paused ....")
+                break
 
             frame_resized = cv2.resize(frame_rgb, (width, height))
             input_data = np.expand_dims(frame_resized, axis=0)
@@ -241,7 +249,8 @@ while True:
                     # Draw label
                     object_name = labels[int(classes[i])] # Look up object name from "labels" array using class index
                     if (object_name == 'person' or object_name == 'car'):
-                    
+       
+        ##    THIS PART IS NEEDED TO DRAW BOXES AROUND DETECTED OBJECTS             
                     # Get bounding box coordinates and draw box
                     # Interpreter can return coordinates that are outside of image dimensions, need to force them to be within image using max() and min()
         ##            ymin = int(max(1,(boxes[i][0] * imH)))
@@ -252,7 +261,7 @@ while True:
         ##            cv2.rectangle(frame, (xmin,ymin), (xmax,ymax), (10, 255, 0), 2)
                         print(object_name, "detected!!")
 
-
+    ##         THIS PART IS NEEDED ONLY FOR VIDEO FILES
     ##                    temp_file = '/home/pi/proj/cam_vids/temp.h264'
     ##                    src_fname = '/home/pi/proj/cam_vids/temp.mp4'
     ##                    dst_fname = '/home/pi/proj/cam_vids/%s.mp4' % time_str
@@ -266,27 +275,26 @@ while True:
                         img_fpath = '/home/pi/proj/cam_vids/%s.jpg' % time_str
                         cv2.imwrite(img_fpath, frame)
 
+                        ## Image hash based filtering to avoid storing duplicates images; eg: when a car is parked in front of camera
                         hash_new = imagehash.average_hash(Image.open(img_fpath))
                         hash_new_int = hash_new.__hash__()
 
                         hash_diff = abs(hash_prev - hash_new_int)
-                        if hash_diff < cutoff:
+                        if hash_diff < img_hash_cutoff:
                             print("similar images, event ignored ....")
                             os.remove(img_fpath)
                         hash_prev = hash_new_int
 
-
-
-                    
+    ##            THIS CODE IS NEEDED FOR VIDEO FILES INSTEAD OF IMAGES                
     ##                    subprocess.run(['MP4Box', '-add', '/home/pi/proj/cam_vids/temp.h264', '/home/pi/proj/cam_vids/temp.mp4'])
     ##                    os.rename(src_fname, dst_fname)
-##                        os.remove(img_fpath)
+    ##                    os.remove(img_fpath)
     ##                    subprocess.run(['rclone', 'copy', dst_fname, 'Cam_Drive:Cam_Drive'])
-                        media_upld_loop_cnt = media_upld_loop_cnt + 1
-                        print("CNT=", media_upld_loop_cnt)
                         
+                        media_upld_loop_cnt = media_upld_loop_cnt + 1
                         break
 
+    ##            THIS CODE IS NEEDED FOR PUTTING LABELS AROUND BOXES               
         ##            label = '%s: %d%%' % (object_name, int(scores[i]*100)) # Example: 'person: 72%'
         ##            labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2) # Get font size
         ##            label_ymin = max(ymin, labelSize[1] + 10) # Make sure not to draw label too close to top of window
