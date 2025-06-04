@@ -171,6 +171,20 @@ input_std = 127.5
 frame_rate_calc = 1
 freq = cv2.getTickFrequency()
 
+#Define and start Google Drive rclone sync thread
+def rclone_sync():
+    while True:
+        time.sleep(60)
+        print("uploading images from recent incidents ....")
+        
+        img_dir = '/home/pi/proj/cam_vids'
+        subprocess.run(['rclone', 'sync', img_dir, 'Cam_Drive:Cam_Drive'])
+        
+        print("upload complete!")
+
+rclone_sync_thread = Thread(target=rclone_sync)
+rclone_sync_thread.start()
+
 # Initialize video stream
 videostream = VideoStream(resolution=(imW,imH),framerate=30).start()
 time.sleep(1)
@@ -190,138 +204,88 @@ while True:
     first_loop = 0
         
     subprocess.run(['rclone', 'delete', 'Cam_Drive:Cam_Drive'])
-    shutil.rmtree('/home/pi/proj/cam_vids/')
-    os.mkdir('/home/pi/proj/cam_vids/')
+    os.system('rm -rf /home/pi/proj/cam_vids/*')
     
     time.sleep(1)
- #   hash_prev = imagehash.average_hash(Image.open('/home/pi/tflite1/test1.jpg'))
     hash_prev = 0
     img_hash_cutoff = 5
     light_threshold = 50
 
-    while gdrive_clr_loop_cnt < 10000: ## total images = 10000 * 5
-        
-        print("camera running, looking around!!")
-        media_upld_loop_cnt = 0
+    print("camera running, looking around!!")
 
-        while media_upld_loop_cnt < 5:
+    while gdrive_clr_loop_cnt < 10000: ## total images = 10000
         
-            # Start timer (for calculating frame rate)
-            t1 = cv2.getTickCount()
-
-    ##        pir.wait_for_motion()
+        
+        # Start timer (for calculating frame rate)
+        t1 = cv2.getTickCount()
             
-            # Grab frame from video stream
-            frame1 = videostream.read()
+        # Grab frame from video stream
+        frame1 = videostream.read()
 
-            # Acquire frame and resize to expected shape [1xHxWx3]
-            frame = frame1.copy()
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # Acquire frame and resize to expected shape [1xHxWx3]
+        frame = frame1.copy()
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            # Darkness Detection
-            frame_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-            avg_brightness = np.mean(frame_gray)
-            if avg_brightness < light_threshold:
-                print("too dark to process, camera paused ....")
-                break
+        # Darkness Detection
+        frame_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        avg_brightness = np.mean(frame_gray)
+        if avg_brightness < light_threshold:
+            print("too dark to process, camera paused ....")
+            break
 
-            frame_resized = cv2.resize(frame_rgb, (width, height))
-            input_data = np.expand_dims(frame_resized, axis=0)
+        frame_resized = cv2.resize(frame_rgb, (width, height))
+        input_data = np.expand_dims(frame_resized, axis=0)
 
-            # Normalize pixel values if using a floating model (i.e. if model is non-quantized)
-            if floating_model:
-                input_data = (np.float32(input_data) - input_mean) / input_std
+        # Normalize pixel values if using a floating model (i.e. if model is non-quantized)
+        if floating_model:
+            input_data = (np.float32(input_data) - input_mean) / input_std
 
-            # Perform the actual detection by running the model with the image as input
-            interpreter.set_tensor(input_details[0]['index'],input_data)
-            interpreter.invoke()
+        # Perform the actual detection by running the model with the image as input
+        interpreter.set_tensor(input_details[0]['index'],input_data)
+        interpreter.invoke()
 
-            # Retrieve detection results
-            boxes = interpreter.get_tensor(output_details[0]['index'])[0] # Bounding box coordinates of detected objects
-            classes = interpreter.get_tensor(output_details[1]['index'])[0] # Class index of detected objects
-            scores = interpreter.get_tensor(output_details[2]['index'])[0] # Confidence of detected objects
-            #num = interpreter.get_tensor(output_details[3]['index'])[0]  # Total number of detected objects (inaccurate and not needed)
+        # Retrieve detection results
+        boxes = interpreter.get_tensor(output_details[0]['index'])[0] # Bounding box coordinates of detected objects
+        classes = interpreter.get_tensor(output_details[1]['index'])[0] # Class index of detected objects
+        scores = interpreter.get_tensor(output_details[2]['index'])[0] # Confidence of detected objects
+        #num = interpreter.get_tensor(output_details[3]['index'])[0]  # Total number of detected objects (inaccurate and not needed)
 
-            # Loop over all detections and draw detection box if confidence is above minimum threshold
-            for i in range(len(scores)):
-                if ((scores[i] > min_conf_threshold) and (scores[i] <= 1.0)):
+        # Loop over all detections and draw detection box if confidence is above minimum threshold
+        for i in range(len(scores)):
+            if ((scores[i] > min_conf_threshold) and (scores[i] <= 1.0)):
 
-                    # Draw label
-                    object_name = labels[int(classes[i])] # Look up object name from "labels" array using class index
-                    if (object_name == 'person' or object_name == 'car'):
+                # Draw label
+                object_name = labels[int(classes[i])] # Look up object name from "labels" array using class index
+                if (object_name == 'person' or object_name == 'car'):
        
-        ##    THIS PART IS NEEDED TO DRAW BOXES AROUND DETECTED OBJECTS             
-                    # Get bounding box coordinates and draw box
-                    # Interpreter can return coordinates that are outside of image dimensions, need to force them to be within image using max() and min()
-        ##            ymin = int(max(1,(boxes[i][0] * imH)))
-        ##            xmin = int(max(1,(boxes[i][1] * imW)))
-        ##            ymax = int(min(imH,(boxes[i][2] * imH)))
-        ##            xmax = int(min(imW,(boxes[i][3] * imW)))
-                    
-        ##            cv2.rectangle(frame, (xmin,ymin), (xmax,ymax), (10, 255, 0), 2)
-                        print(object_name, "detected!!")
-
-    ##         THIS PART IS NEEDED ONLY FOR VIDEO FILES
-    ##                    temp_file = '/home/pi/proj/cam_vids/temp.h264'
-    ##                    src_fname = '/home/pi/proj/cam_vids/temp.mp4'
-    ##                    dst_fname = '/home/pi/proj/cam_vids/%s.mp4' % time_str
-    ##
-    ##                    camera.start_recording(temp_file)    
-    ##                    time.sleep(5)
-    ##                    camera.stop_recording()
+                    print(object_name, "detected!!")
                         
-                        time_local = time.localtime()
-                        time_str = time.asctime(time_local)
-                        img_fpath = '/home/pi/proj/cam_vids/%s.jpg' % time_str
-                        cv2.imwrite(img_fpath, frame)
+                    time_local = time.localtime()
+                    time_str = time.asctime(time_local)
+                    img_fpath = '/home/pi/proj/cam_vids/%s.jpg' % time_str
+                    cv2.imwrite(img_fpath, frame)
 
-                        ## Image hash based filtering to avoid storing duplicates images; eg: when a car is parked in front of camera
-                        hash_new = imagehash.average_hash(Image.open(img_fpath))
-                        hash_new_int = hash_new.__hash__()
+                    ## Image hash based filtering to avoid storing duplicates images; eg: when a car is parked in front of camera
+                    hash_new = imagehash.average_hash(Image.open(img_fpath))
+                    hash_new_int = hash_new.__hash__()
 
-                        hash_diff = abs(hash_prev - hash_new_int)
-                        if hash_diff < img_hash_cutoff:
-                            print("similar images, event ignored ....")
-                            os.remove(img_fpath)
-                        hash_prev = hash_new_int
+                    hash_diff = abs(hash_prev - hash_new_int)
+                    if hash_diff < img_hash_cutoff:
+                        print("similar images, event ignored ....")
+                        os.remove(img_fpath)
+                    hash_prev = hash_new_int
 
-    ##            THIS CODE IS NEEDED FOR VIDEO FILES INSTEAD OF IMAGES                
-    ##                    subprocess.run(['MP4Box', '-add', '/home/pi/proj/cam_vids/temp.h264', '/home/pi/proj/cam_vids/temp.mp4'])
-    ##                    os.rename(src_fname, dst_fname)
-    ##                    os.remove(img_fpath)
-    ##                    subprocess.run(['rclone', 'copy', dst_fname, 'Cam_Drive:Cam_Drive'])
-                        
-                        media_upld_loop_cnt = media_upld_loop_cnt + 1
-                        break
+                    gdrive_clr_loop_cnt = gdrive_clr_loop_cnt + 1
+                    break
 
-    ##            THIS CODE IS NEEDED FOR PUTTING LABELS AROUND BOXES               
-        ##            label = '%s: %d%%' % (object_name, int(scores[i]*100)) # Example: 'person: 72%'
-        ##            labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2) # Get font size
-        ##            label_ymin = max(ymin, labelSize[1] + 10) # Make sure not to draw label too close to top of window
-        ##            cv2.rectangle(frame, (xmin, label_ymin-labelSize[1]-10), (xmin+labelSize[0], label_ymin+baseLine-10), (255, 255, 255), cv2.FILLED) # Draw white box to put label text in
-        ##            cv2.putText(frame, label, (xmin, label_ymin-7), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2) # Draw label text
             
             # Calculate framerate
             t2 = cv2.getTickCount()
             time1 = (t2-t1)/freq
             frame_rate_calc= 1/time1
 ##            print("frame rate =", frame_rate_calc) # avoiding for now since printing same frame rate every time doesn't make sense
-            time.sleep(1) # adding a gap to avoid detecting too many similar images
-        # Draw framerate in corner of frame
-    ##    cv2.putText(frame,'FPS: {0:.2f}'.format(frame_rate_calc),(30,50),cv2.FONT_HERSHEY_SIMPLEX,1,(255,255,0),2,cv2.LINE_AA)
-
-        # All the results have been drawn on the frame, so it's time to display it.
-    ##    cv2.imshow('Object detector', frame)
-
-        print("camera paused, uploading images from recent incident ....")
-        
-        img_dir = '/home/pi/proj/cam_vids'
-        subprocess.run(['rclone', 'sync', img_dir, 'Cam_Drive:Cam_Drive'])
-        
-        print("upload complete!")
-
-        gdrive_clr_loop_cnt = gdrive_clr_loop_cnt + 1
-
+            
+        time.sleep(1) # adding a gap to avoid detecting too many similar images
 
         # Press 'q' to quit
         if cv2.waitKey(1) == ord('q'):
@@ -330,3 +294,4 @@ while True:
 # Clean up
 cv2.destroyAllWindows()
 videostream.stop()
+rclone_sync_thread.stop()
