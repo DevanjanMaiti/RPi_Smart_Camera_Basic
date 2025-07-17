@@ -204,12 +204,11 @@ while True:
     first_loop = 0
         
     subprocess.run(['rclone', 'delete', 'Cam_Drive:Cam_Drive'])
-    os.system('rm -rf /home/pi/proj/cam_vids/*')
+    os.system('rm -rf /home/pi/proj/cam_vids/*/*')
     
-    time.sleep(1)
     hash_prev = 0
-    img_hash_cutoff = 5
-    light_threshold = 50
+    img_hash_cutoff = 20
+    light_threshold = 0
 
     print("camera running, looking around!!")
 
@@ -229,6 +228,7 @@ while True:
         # Darkness Detection
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
         avg_brightness = np.mean(frame_gray)
+        print("BRIGHTNESS=", avg_brightness)
         if avg_brightness < light_threshold:
             print("too dark to process, camera paused ....")
             break
@@ -262,7 +262,7 @@ while True:
                         
                     time_local = time.localtime()
                     time_str = time.asctime(time_local)
-                    img_fpath = '/home/pi/proj/cam_vids/%s.jpg' % time_str
+                    img_fpath = '/home/pi/proj/cam_vids/%s/%s.jpg' % (object_name, time_str)
                     cv2.imwrite(img_fpath, frame)
 
                     ## Image hash based filtering to avoid storing duplicates images; eg: when a car is parked in front of camera
@@ -270,6 +270,7 @@ while True:
                     hash_new_int = hash_new.__hash__()
 
                     hash_diff = abs(hash_prev - hash_new_int)
+                    print("HASH DIFF=", hash_diff)
                     if hash_diff < img_hash_cutoff:
                         print("similar images, event ignored ....")
                         os.remove(img_fpath)
@@ -285,8 +286,6 @@ while True:
             frame_rate_calc= 1/time1
 ##            print("frame rate =", frame_rate_calc) # avoiding for now since printing same frame rate every time doesn't make sense
             
-        time.sleep(1) # adding a gap to avoid detecting too many similar images
-
         # Press 'q' to quit
         if cv2.waitKey(1) == ord('q'):
             break
