@@ -256,7 +256,7 @@ while True:
 
                 # Draw label
                 object_name = labels[int(classes[i])] # Look up object name from "labels" array using class index
-                if (object_name == 'person' or object_name == 'car'):
+                if (object_name == 'person' or object_name == 'car' or object_name == 'dog' or object_name == 'cat' or object_name == 'motorcycle'  or object_name == 'cow' or object_name == 'bird'):
        
                     print(object_name, "detected!!")
                         
